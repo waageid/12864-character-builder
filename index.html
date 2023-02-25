@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>12864 Character Builder</title>
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #app {
+            display: flex;
+        }
+
+        .design {
+            display: flex;
+            gap: 20px;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .toolbar {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            width: 100%;
+        }
+
+        .form {
+            display: flex;
+            gap: 20px;
+        }
+
+        .builder {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .builder .row {
+            display: flex;
+            gap: 2px;
+        }
+
+        .builder .row .cell {
+            width: 20px;
+            height: 20px;
+            background: #fff;
+            border: 1px solid gray;
+            cursor: pointer;
+        }
+
+        .builder .row .cell.highlight {
+            background: gray;
+        }
+
+        .preview {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 0 40px;
+        }
+
+        .screen {
+            background: black;
+            border: 1px solid black;
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            zoom: 0.5;
+        }
+
+        .screen .row {
+            flex: 0 0 auto;
+            display: flex;
+            gap: 1px;
+        }
+
+        .screen .row .cell {
+            flex: 0 0 auto;
+            width: 10px;
+            height: 10px;
+            background: #000;
+        }
+
+        .screen .row .cell.white.highlight {
+            background: #fff;
+        }
+
+        .screen .row .cell.yellow.highlight {
+            background: yellow;
+        }
+
+        .screen .row .cell.blue.highlight {
+            background: aqua;
+        }
+
+        .statusbar {
+            width: 100%;
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .btn {
+            border: 1px solid gray;
+            word-break: keep-all;
+            padding: 4px;
+            border-radius: 8px;
+            cursor: pointer;
+            user-select: none;
+            overflow: hidden;
+        }
+
+        .chars {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            gap: 10px;
+        }
+
+        .btn:has(.delete) {
+            display: flex;
+            align-items: center;
+            padding: 0;
+        }
+
+        .btn .content {
+            padding: 0 10px;
+        }
+
+        .btn .delete {
+            padding: 5px;
+            color: #ff4d4f;
+            background: #ffccc7;
+        }
+
+        input:not([type="checkbox"]) {
+            width: 100px;
+            height: 20px;
+        }
+
+        select {
+            width: 50px;
+            height: 20px;
+        }
+
+        label {
+            display: flex;
+            align-items: center;
+        }
+
+        .flex {
+            display: flex;
+        }
+
+        .items-center {
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="preview">
+            <div class="form">
+                <label for="screenWidth">
+                    宽度
+                    <select id="screenWidth" v-model="screenWidth">
+                        <option :value="128">128</option>
+                    </select>
+                </label>
+                <label for="screenHeight">
+                    高度
+                    <select id="screenHeight" v-model="screenHeight">
+                        <option :value="32">32</option>
+                        <option :value="64">64</option>
+                    </select>
+                </label>
+
+                <label for="screenMode">
+                    显示模式
+                    <select id="screenMode" v-model="screenMode">
+                        <template v-for="(mode, index) in screenModes" :key="index">
+                            <option :value="index">{{mode.label}}</option>
+                        </template>
+                    </select>
+                </label>
+            </div>
+            <div class="screen">
+                <template v-for="(,y) in screenHeight" :key="y">
+                    <div class="row">
+                        <template v-for="(,x) in screenWidth" :key="x">
+                            <div class="cell"
+                                :class="[{highlight: screenCells[screenWidth * y + x]}, y > 15 ? screenColors[1] : screenColors[0]]"
+                                @click="toggle(x, y)">
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="statusbar">
+                <label for="screenRow">
+                    行
+                    <input id="screenRow" type="number" :step="1" :min="0" :max="parseInt(screenHeight / 8)"
+                        v-model="screenRow" />
+                </label>
+                <label for="screenCol">
+                    列
+                    <input id="screenCol" type="number" :step="1" :min="0" :max="screenWidth" v-model="screenCol" />
+                </label>
+                <div class="btn" @click="resetPosition">重置</div>
+                <div class="btn" @click="clearScreen">清屏</div>
+            </div>
+            <div class="chars">
+                <template v-for="(char, index) in charData" :key="index" :title="`在${screenRow}行${screenRow}列插入字符`">
+                    <div class="btn">
+                        <div class="content" @click="loadChar(char.value, true)">{{char.label}}</div>
+                        <div class="delete" @click="deleteDesign(index)">x</div>
+                    </div>
+                </template>
+            </div>
+        </div>
+        <div class="design">
+            <div class="form">
+                <label for="width">
+                    宽度
+                    <select id="width" v-model="width">
+                        <option :value="8">8</option>
+                        <option :value="16">16</option>
+                    </select>
+                </label>
+                <label for="height">
+                    高度
+                    <select id="height" v-model="height">
+                        <option :value="8">8</option>
+                        <option :value="16">16</option>
+                    </select>
+                </label>
+            </div>
+            <div class="builder">
+                <template v-for="(,y) in height" :key="y">
+                    <div class="row">
+                        <template v-for="(,x) in width" :key="x">
+                            <div class="cell" :class="{highlight: cells[width * y + x]}" @click="toggle(x, y)">
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+            <div class="toolbar">
+                <div class="flex items-center"><input type="checkbox" v-model="previewRealTime" />实时预览</div>
+                <div v-if="!previewRealTime" class="btn" @click="clearScreenAndPreview">预览</div>
+                <div class="btn" @click="saveDeign">保存</div>
+            </div>
+            <div class="result">{{result}}</div>
+        </div>
+    </div>
+    <script src="https://unpkg.com/vue"></script>
+</body>
+<script>
+    const { createApp, reactive, ref, watch, computed, nextTick } = Vue
+
+    const getStore = (key) => {
+        try {
+            return JSON.parse(localStorage.getItem(key))
+        } catch (err) {
+            localStorage.removeItem(key)
+            return null
+        }
+    }
+    const setStore = (key, value) => {
+        const rawData = JSON.stringify(value)
+        localStorage.setItem(key, rawData)
+    }
+    createApp({
+        setup: () => {
+            const storeData = getStore('__store_data')
+            const charData = ref(storeData?.length > 0 ? storeData : [
+                {
+                    label: '数字1',
+                    value: '{ 0x00, 0x00, 0x82, 0x83, 0xff, 0x80, 0x00, 0x00 }',
+                },
+                {
+                    label: '汉字“自”',
+                    value: '{ 0x00, 0x00, 0x00, 0xF8, 0xF8, 0x48, 0x4C, 0x4F, 0x4B, 0x4A, 0x48, 0x48, 0xF8, 0xF8, 0x00, 0x00, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0xFF, 0xFF, 0x00, 0x00 }'
+                }
+            ])
+            const width = ref(8)
+            const height = ref(8)
+            const screenWidth = ref(128)
+            const screenHeight = ref(64)
+            const screenCol = ref(0)
+            const screenRow = ref(0)
+            const screenMode = ref(0)
+            const previewRealTime = ref(false)
+            const cells = reactive(Array.from({ length: width.value * height.value }, (v, k) => false))
+            const screenCells = reactive(Array.from({ length: screenWidth.value * screenHeight.value }, (v, k) => false))
+            const result = computed(() => {
+                let array = []
+                const lens = parseInt(width.value * height.value / 8)
+                for (let i = 0; i < lens; i++) {
+                    let value = 0
+                    for (let j = 0; j < 8; j++) {
+                        value = value << 1
+                        value += cells[(parseInt(i / width.value) * 8 + 8 - j - 1) * width.value + i % width.value] ? 1 : 0
+                    }
+                    array.push('0x' + value.toString(16).padStart(2, '0'))
+                }
+                return '{ ' + array.join(', ') + ' }'
+            })
+
+            const screenModes = computed(() => {
+                return [
+                    { label: '白色', colors: ['white', 'white'] },
+                    { label: '蓝色', colors: ['blue', 'blue'] },
+                    screenHeight.value === 64 && { label: '黄蓝', colors: ['yellow', 'blue'] }
+                ].filter(Boolean)
+            })
+
+            const screenColors = computed(() => {
+                return screenModes.value[screenMode.value].colors
+            })
+
+            const clearDesign = () => {
+                for (let i = 0; i < width.value * height.value; i++) {
+                    cells[i] = false
+                }
+            }
+
+            const toggle = (x, y) => {
+                const index = y * width.value + x
+                cells[index] = !cells[index]
+            }
+
+            const load8BitList = (values) => {
+                for (let x = 0; x < values.length; x++) {
+                    let checkBit = 0x01
+                    for (let y = 0; y < 8; y++) {
+                        if (checkBit & values[x]) {
+                            screenCells[(screenRow.value * 8 + y) * screenWidth.value + screenCol.value] = true
+                        }
+                        checkBit = checkBit << 1
+                    }
+                    screenCol.value = (screenCol.value + 1) % screenWidth.value
+                }
+            }
+
+            const loadChar = (char, refreshDesign = false) => {
+                const backupScreenCol = screenCol.value
+                const backupScreenRow = screenRow.value
+                const values = char.replace(/^\{/, '').replace(/\}$/, '').split(',').map(it => parseInt(it.trim()))
+                load8BitList(values.slice(0, 8))
+                if (values.length > 8) {
+                    load8BitList(values.slice(8, 16))
+                }
+                if (values.length === 32) {
+                    screenCol.value = backupScreenCol
+                    screenRow.value = (screenRow.value + 1) % parseInt(screenHeight.value / 8)
+                    load8BitList(values.slice(16, 32))
+                    screenRow.value = backupScreenRow
+
+                }
+
+                if (refreshDesign) {
+                    if (values.length === 8) {
+                        width.value = 8
+                        height.value = 8
+                    } else if (values.length === 16) {
+                        width.value = 16
+                        height.value = 8
+                    } else if (values.length === 32) {
+                        width.value = 16
+                        height.value = 16
+                    }
+                    nextTick(() => {
+                        for (let x = 0; x < values.length; x++) {
+                            let checkBit = 0x01
+                            for (let y = 0; y < 8; y++) {
+                                if (checkBit & values[x]) {
+                                    cells[(parseInt(x / width.value) * 8 + y) * width.value + x % width.value] = true
+                                }
+                                checkBit = checkBit << 1
+                            }
+                        }
+                    })
+                }
+            }
+
+            const resetPosition = () => {
+                screenRow.value = 0
+                screenCol.value = 0
+            }
+
+            const clearScreen = () => {
+                for (let i = 0; i < screenCells.length; i++) {
+                    screenCells[i] = false
+                }
+            }
+
+            const clearScreenAndPreview = () => {
+                clearScreen()
+                resetPosition()
+                loadChar(result.value)
+            }
+
+            const saveDeign = () => {
+                const label = prompt('请输入保存的配置名称')
+                if (!label) {
+                    return
+                }
+                charData.value = [
+                    ...charData.value,
+                    {
+                        label,
+                        value: result.value,
+                    }
+                ]
+            }
+
+            const deleteDesign = (index) => {
+                const ok = confirm(`确认删除（${charData.value[index].label || ''}）？`)
+                if (!ok) {
+                    return
+                }
+                const newCharData = [...charData.value]
+                newCharData.splice(index, 1)
+                charData.value = newCharData
+            }
+            watch([width, height], (values) => {
+                clearDesign()
+            })
+            watch(charData, (value) => {
+                setStore('__store_data', value)
+            })
+            watch(result, () => {
+                if (!previewRealTime.value) {
+                    return
+                }
+                clearScreenAndPreview()
+            })
+            watch(previewRealTime, (value) => {
+                if (value) {
+                    clearScreenAndPreview()
+                }
+            })
+            return {
+                screenWidth,
+                screenHeight,
+                screenMode,
+                screenCol,
+                screenRow,
+                width,
+                height,
+                cells,
+                screenCells,
+                toggle,
+                result,
+                screenModes,
+                screenColors,
+                charData,
+                loadChar,
+                resetPosition,
+                clearScreen,
+                clearScreenAndPreview,
+                saveDeign,
+                deleteDesign,
+                previewRealTime,
+            }
+        },
+    }).mount('#app')
+</script>
+
+</html>
